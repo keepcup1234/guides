@@ -7,6 +7,7 @@
 * [Test-elk-kibana01 config](#test-elk-kibana01-config)
 * [Test-elk-logstash01 config](#test-elk-logstash01-config)
 * [Test-elk-filebeat01 config](#test-elk-filebeat01-config)
+* [Using Windows CA for certificates](#using-windows-ca-for-certificates)
 
 ## Setup
 
@@ -187,4 +188,63 @@ After you start filebeat, it should send logs to logstash
 [Back to content list](#content)
 
 ## Using Windows CA for certificates
-TODO
+
+Main thing that is different is generating certificates. So on every node we will generate private key, csr and then we will make certificate by windows CA. 
+1. Generating private key : `openssl genrsa -aes256 -out somekey.key 4096` This will ask for password and then for using this key, you will need to enter the password
+2. (optional) remove password from private key : `openssl rsa -in somekey.kkey -out nopwdkey.key` . We will use private key without password
+3. To create CSR, we will use configuration file **csr.conf** :
+```
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+[req_distinguished_name]
+C = 2 letters country
+ST = state
+L = town
+O = organzivation
+OU = organization unit
+CN = server.my.test ( common name )
+[v3_req]
+keyUsage = keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth,clientAuth
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = server.my.test
+```
+
+CN and DNS.1 must be same
+4. generate CSR : `openssl req -sha256 -key nopwdkey.key -new -out server.csr -config csr.conf`
+5. now copy&paste the csr to CA
+6. Create new CA template ( i named it Elasticsearch ), duplicate some current template and change:
+*Extensions->Application policies* add *Client authentication*, save it
+7. Add the new template to template list . In *certsrv* windows right click on *Certificate Templates->New->Certificate Template to Issue* select your template
+8. Sign CSR with template Elasticsearch. Run cmd with admin priv : `certreq -attrib "CertificateTemplate:Elasticsearch"`
+9. Copy certificate back to the node
+10. Now to editing elasitcsearch.yml file. There is few differences, instead these lines used during p12 files :
+```
+xpack.security.transport.ssl.keystore.path: test-elk-master01.p12
+xpack.security.transport.ssl.truststore.path: test-elk-master01.p12
+```
+replace the by these lines :
+```
+xpack.security.transport.ssl.key: test-elk-master01.key
+xpack.security.transport.ssl.certificate: test-elk-master01.crt
+xpack.security.transport.ssl.certificate_authorities: ["/etc/elasticsearch/ca-lab.crt"]
+```
+( all certs are in */etc/elasticsearch/* )
+
+Generating certificates in such way you can use for all nodes. For kibana01 web interface, you can use *WebServer* template. In this case , remove *clientAuth* from **csr.conf** file.
+11. On master01 in **elasticsearch.yml** file replace line :
+```
+xpack.security.http.ssl.keystore.path: "http.p12"
+```
+by these lines :
+```
+xpack.security.http.ssl.key:  test-elk-master01.key
+xpack.security.http.ssl.certificate: test-elk-master01.crt
+xpack.security.http.ssl.certificate_authorities: [ "/etc/elasticsearch/ca-lab.crt" ] 
+```
+These certs are used for communication between kibana and elasticsearch. You can generate separate certificates, but be ensure that CN and DNS1 in **csr.conf** is the same as *elasticsearch.hosts* value in **kibana.yml** file
+
+[Back to content list](#content)
