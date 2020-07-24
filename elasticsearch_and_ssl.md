@@ -212,12 +212,11 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = server.my.test
 ```
-
 CN and DNS.1 must be same
+
 4. generate CSR : `openssl req -sha256 -key nopwdkey.key -new -out server.csr -config csr.conf`
 5. now copy&paste the csr to CA
-6. Create new CA template ( i named it Elasticsearch ), duplicate some current template and change:
-*Extensions->Application policies* add *Client authentication*, save it
+6. Create new CA template ( i named it Elasticsearch ), duplicate some current template and change: *Extensions->Application policies* add *Client authentication*, save it
 7. Add the new template to template list . In *certsrv* windows right click on *Certificate Templates->New->Certificate Template to Issue* select your template
 8. Sign CSR with template Elasticsearch. Run cmd with admin priv : `certreq -attrib "CertificateTemplate:Elasticsearch"`
 9. Copy certificate back to the node
@@ -235,6 +234,7 @@ xpack.security.transport.ssl.certificate_authorities: ["/etc/elasticsearch/ca-la
 ( all certs are in */etc/elasticsearch/* )
 
 Generating certificates in such way you can use for all nodes. For kibana01 web interface, you can use *WebServer* template. In this case , remove *clientAuth* from **csr.conf** file.
+
 11. On master01 in **elasticsearch.yml** file replace line :
 ```
 xpack.security.http.ssl.keystore.path: "http.p12"
